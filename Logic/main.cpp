@@ -6,18 +6,16 @@ public:
 	typedef /*std::shared_ptr<Gate>*/ Gate* ptr;
 
 private:
-	class Conn {
+	class ConnIn final {
 		bool _state;
 		Gate::ptr _p;
 	public:
-		typedef std::shared_ptr<Conn> ptr;
+		typedef std::shared_ptr<ConnIn> ptr;
 
-		Conn() : _p(nullptr) { };
-		Conn(Gate::ptr p) : _p(p) { };
+		ConnIn() { }
+		ConnIn(Gate::ptr p) : _p(p) { }
 		void connect_to(Gate::ptr p) { _p = p; }
-		//void set(bool val);
-		//bool state() const { return _state; }
-		Conn& operator=(bool val) {
+		ConnIn& operator=(bool val) {
 			_state = val;
 			if (_p) {
 				_p->eval();
@@ -27,33 +25,50 @@ private:
 		explicit operator bool() const { return _state; }
 	};
 
-	class Connectors {
-		std::vector<Conn::ptr> _conns;
+	class ConnOut final {
+		bool _state;
+		ConnIn::ptr _p;
 	public:
-		Connectors(std::size_t num) : _conns(num) {
-			for (auto& conn : _conns) {
-				conn = std::make_shared<Conn>();
+		ConnOut() { }
+		ConnOut(ConnIn& p) : _p(&p) { }
+		void connect_to(ConnIn::ptr p) { _p = p; }
+		ConnOut& operator=(bool val) {
+			_state = val;
+			if (_p) {
+				*_p = val;
 			}
+			return *this;
 		}
-		Conn::ptr& operator[](std::size_t i) {
+		explicit operator bool() const { return _state; }
+	};
+
+
+
+	template <typename T>
+	class Connectors {
+		std::vector<T> _conns;
+	public:
+		Connectors(std::size_t num) : _conns(num) {	}
+		T& operator[](std::size_t i) {
 			return _conns[i];
 		}
-		Conn::ptr const& operator[](std::size_t i) const {
+		T const& operator[](std::size_t i) const {
 			return _conns[i];
 		}
 		std::size_t size() const { return _conns.size(); }
 	};
 
 protected:
-	Connectors _inputs;
+	Connectors<ConnIn> _inputs;
+	Connectors<ConnOut> _outputs;
 
 public:
-	Connectors const& inputs;
-	Connectors outputs;
+	Connectors<ConnIn> & inputs;
+	Connectors<ConnOut> & outputs;
 
-	Gate(std::size_t num_inputs, std::size_t num_outputs) : _inputs(num_inputs), inputs(_inputs), outputs(num_outputs) {
+	Gate(std::size_t num_inputs, std::size_t num_outputs) : _inputs(num_inputs), _outputs(num_outputs), inputs(_inputs), outputs(_outputs) {
 		for (std::size_t i = 0; i < num_inputs; ++i) {
-			inputs[i]->connect_to(this);
+			_inputs[i].connect_to(this);
 		}
 	}
 	virtual ~Gate() = 0 { };
@@ -65,7 +80,7 @@ class NotGate : public Gate {
 public:
 	NotGate() : Gate(1, 1) { }
 	void eval() {
-		*outputs[0] = !*inputs[0];
+		outputs[0] = !inputs[0];
 	}
 };
 
@@ -73,7 +88,7 @@ class AndGate : public Gate {
 public:
 	AndGate() : Gate(2, 1) { }
 	void eval() {
-		*outputs[0] = *inputs[0] && *inputs[1];
+		outputs[0] = inputs[0] && inputs[1];
 	}
 };
 
@@ -96,11 +111,11 @@ class NotGate2 : public Gate {
 public:
 	NotGate2() : Gate(1, 1) {
 		_inputs[0] = nand1.inputs[0];
-		*nand1.inputs[1] = true;
+		nand1.inputs[1] = true;
 		nand1.outputs[0] = nand2.inputs[0];
-		*nand2.inputs[1] = true;
+		nand2.inputs[1] = true;
 		nand2.outputs[0] = nand3.inputs[0];
-		*nand3.inputs[1] = true;
+		nand3.inputs[1] = true;
 		outputs[0] = nand3.outputs[0];
 	}
 };
@@ -111,36 +126,36 @@ using namespace std;
 int main() {
 	//cout << std::boolalpha;
 
-	NotGate2 not1;
-	*not1.inputs[0] = false;
-	cout << "not(false) = " << bool(*not1.outputs[0]) << '\n';
-	*not1.inputs[0] = true;
-	cout << "not(true) = " << bool(*not1.outputs[0]) << '\n';
-	*not1.inputs[0] = false;
-	cout << "not(false) = " << bool(*not1.outputs[0]) << '\n';
+	NotGate not1;
+	not1.inputs[0] = false;
+	cout << "not(false) = " << bool(not1.outputs[0]) << '\n';
+	not1.inputs[0] = true;
+	cout << "not(true) = " << bool(not1.outputs[0]) << '\n';
+	not1.inputs[0] = false;
+	cout << "not(false) = " << bool(not1.outputs[0]) << '\n';
 
 
 	AndGate and1;
-	*and1.inputs[0] = false;
-	*and1.inputs[1] = false;
-	cout << "and(false, false) = " << bool(*and1.outputs[0]) << '\n';
-	*and1.inputs[0] = true;
-	*and1.inputs[1] = false;
-	cout << "and(true, false) = " << bool(*and1.outputs[0]) << '\n';
-	*and1.inputs[0] = true;
-	*and1.inputs[1] = true;
-	cout << "and(true, true) = " << bool(*and1.outputs[0]) << '\n';
+	and1.inputs[0] = false;
+	and1.inputs[1] = false;
+	cout << "and(false, false) = " << bool(and1.outputs[0]) << '\n';
+	and1.inputs[0] = true;
+	and1.inputs[1] = false;
+	cout << "and(true, false) = " << bool(and1.outputs[0]) << '\n';
+	and1.inputs[0] = true;
+	and1.inputs[1] = true;
+	cout << "and(true, true) = " << bool(and1.outputs[0]) << '\n';
 
 
 	NandGate nand1;
-	*nand1.inputs[0] = false;
-	*nand1.inputs[1] = false;
-	cout << "nand(false, false) = " << bool(*nand1.outputs[0]) << '\n';
-	*nand1.inputs[0] = true;
-	*nand1.inputs[1] = false;
-	cout << "nand(true, false) = " << bool(*nand1.outputs[0]) << '\n';
-	*nand1.inputs[0] = true;
-	*nand1.inputs[1] = true;
-	cout << "nand(true, true) = " << bool(*nand1.outputs[0]) << '\n';
+	nand1.inputs[0] = false;
+	nand1.inputs[1] = false;
+	cout << "nand(false, false) = " << bool(nand1.outputs[0]) << '\n';
+	nand1.inputs[0] = true;
+	nand1.inputs[1] = false;
+	cout << "nand(true, false) = " << bool(nand1.outputs[0]) << '\n';
+	nand1.inputs[0] = true;
+	nand1.inputs[1] = true;
+	cout << "nand(true, true) = " << bool(nand1.outputs[0]) << '\n';
 	return 0;
 }
