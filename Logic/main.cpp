@@ -11,8 +11,6 @@ protected:
 		Gate::ptr _p;
 		std::size_t _input_num;
 	public:
-		typedef std::shared_ptr<Connector> ptr;
-
 		Connector() : _p(nullptr) { };
 		Connector(Gate::ptr p, std::size_t num) : _p(p), _input_num(num) { };
 		void connect_to(Gate::ptr p, std::size_t num) { _p = p; _input_num = num; }
@@ -30,27 +28,48 @@ protected:
 		operator bool() const { return _state; }
 	};
 
-public:
-	std::unique_ptr<Connector[]> const inputs;
-	std::unique_ptr<Connector[]> const outputs;
+	template <typename T>
+	class FixedArray {
+		std::unique_ptr<T[]> _p;
+		std::size_t _size;
+	public:
+		FixedArray(std::size_t size) : _p(std::make_unique<T[]>(size)), _size(size) { }
+		T& operator[](std::size_t index) { return _p[index]; }
+		const T& operator[](std::size_t index) const { return _p[index]; }
+		std::size_t size() { return _size; }
+	};
 
-	Gate(std::size_t num_inputs, std::size_t num_outputs) : inputs(std::make_unique<Connector[]>(num_inputs)), outputs(std::make_unique<Connector[]>(num_outputs)) {
+public:
+	typedef FixedArray<Connector> ConnArray;
+	ConnArray inputs;
+	ConnArray outputs;
+
+	Gate(std::size_t num_inputs, std::size_t num_outputs) : inputs(num_inputs), outputs(num_outputs) {
 		for (std::size_t i = 0; i < num_inputs; ++i) {
 			inputs[i].connect_to(this, i);
 		}
 	}
-	virtual ~Gate() = 0 { };
+	Gate(ConnArray in, ConnArray out) : inputs(std::move(in)), outputs(std::move(out)) { }
+	virtual ~Gate() { };
 
 	virtual void eval() { }
 };
 
 class GateTerminator : public Gate {
-public:
 	Connector& p_output;
+public:
 	GateTerminator(Connector& conn) : Gate(1, 0), p_output(conn) { }
+	~GateTerminator() { }
 	void eval() {
 		p_output = inputs[0];
 	}
+};
+
+class GateCompose : public Gate {
+	std::vector<std::unique_ptr<Gate>> _gates;
+public:
+	GateCompose(ConnArray in, ConnArray out, std::vector<std::unique_ptr<Gate>> gates) : Gate(std::move(in), std::move(out)), _gates(std::move(gates)) { }
+	~GateCompose() { };
 };
 
 class NotGate : public Gate {
@@ -104,6 +123,7 @@ using namespace std;
 
 int main() {
 	//cout << std::boolalpha;
+	cout << sizeof(std::shared_ptr<int>) << ' ' << sizeof(std::unique_ptr<int>) << '\n';
 
 	NotGate2 not1;
 	not1.inputs[0] = false;
@@ -125,8 +145,19 @@ int main() {
 	and1.inputs[1] = true;
 	cout << "and(true, true) = " << bool(and1.outputs[0]) << '\n';
 
+	Gate::ConnArray ins(2);
+	Gate::ConnArray outs(1);
+	std::vector<std::unique_ptr<Gate>> gates;
+	gates.emplace_back(std::make_unique<AndGate>());
+	gates.emplace_back(std::make_unique<NotGate>());
+	gates.emplace_back(std::make_unique<GateTerminator>(outs[0]));
+	ins[0].connect_to(gates[0].get(), 0);
+	ins[1].connect_to(gates[0].get(), 1);
+	gates[0]->outputs[0].connect_to(gates[1].get(), 0);
+	gates[1]->outputs[0].connect_to(gates[2].get(), 0);
+	GateCompose nand1{ std::move(ins), std::move(outs), std::move(gates) };
 
-	NandGate nand1;
+	//NandGate nand1;
 	nand1.inputs[0] = false;
 	nand1.inputs[1] = false;
 	cout << "nand(false, false) = " << bool(nand1.outputs[0]) << '\n';
