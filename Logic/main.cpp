@@ -6,18 +6,18 @@ public:
 	typedef /*std::shared_ptr<Gate>*/ Gate* ptr;
 
 protected:
-	class Conn {
+	class Connector {
 		bool _state;
 		Gate::ptr _p;
 		std::size_t _input_num;
 	public:
-		typedef std::shared_ptr<Conn> ptr;
+		typedef std::shared_ptr<Connector> ptr;
 
-		Conn() : _p(nullptr) { };
-		Conn(Gate::ptr p, std::size_t num) : _p(p), _input_num(num) { };
+		Connector() : _p(nullptr) { };
+		Connector(Gate::ptr p, std::size_t num) : _p(p), _input_num(num) { };
 		void connect_to(Gate::ptr p, std::size_t num) { _p = p; _input_num = num; }
-		Conn& operator=(Conn const& other) { return operator=(other._state); }
-		Conn& operator=(bool val) {
+		Connector& operator=(Connector const& other) { return operator=(other._state); }
+		Connector& operator=(bool val) {
 			_state = val;
 			if (_p) {
 				if (&_p->inputs[_input_num] != this) {
@@ -31,10 +31,10 @@ protected:
 	};
 
 public:
-	std::unique_ptr<Conn[]> const inputs;
-	std::unique_ptr<Conn[]> const outputs;
+	std::unique_ptr<Connector[]> const inputs;
+	std::unique_ptr<Connector[]> const outputs;
 
-	Gate(std::size_t num_inputs, std::size_t num_outputs) : inputs(std::make_unique<Conn[]>(num_inputs)), outputs(std::make_unique<Conn[]>(num_outputs)) {
+	Gate(std::size_t num_inputs, std::size_t num_outputs) : inputs(std::make_unique<Connector[]>(num_inputs)), outputs(std::make_unique<Connector[]>(num_outputs)) {
 		for (std::size_t i = 0; i < num_inputs; ++i) {
 			inputs[i].connect_to(this, i);
 		}
@@ -46,8 +46,8 @@ public:
 
 class GateTerminator : public Gate {
 public:
-	Conn& p_output;
-	GateTerminator(Conn& conn) : Gate(1, 0), p_output(conn) { }
+	Connector& p_output;
+	GateTerminator(Connector& conn) : Gate(1, 0), p_output(conn) { }
 	void eval() {
 		p_output = inputs[0];
 	}
