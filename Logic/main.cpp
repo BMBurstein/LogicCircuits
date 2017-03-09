@@ -5,7 +5,7 @@ class Gate {
 public:
 	typedef /*std::shared_ptr<Gate>*/ Gate* ptr;
 
-private:
+protected:
 	class Conn {
 		bool _state;
 		Gate::ptr _p;
@@ -20,8 +20,8 @@ private:
 		Conn& operator=(bool val) {
 			_state = val;
 			if (_p) {
-				if (&_p->_inputs[_input_num] != this) {
-					_p->_inputs[_input_num] = val;
+				if (&_p->inputs[_input_num] != this) {
+					_p->inputs[_input_num] = val;
 				}
 				_p->eval();
 			}
@@ -30,44 +30,34 @@ private:
 		operator bool() const { return _state; }
 	};
 
-	template <typename T>
-	class Connectors {
-		std::size_t _num;
-		std::unique_ptr<T[]> _conns;
-	public:
-		Connectors(std::size_t num) : _num(num), _conns(std::make_unique<T[]>(num)) {	}
-		T& operator[](std::size_t i) {
-			return _conns[i];
-		}
-		T const& operator[](std::size_t i) const {
-			return _conns[i];
-		}
-		std::size_t size() const { return _num; }
-	};
-
-protected:
-	Connectors<Conn> _inputs;
-	Connectors<Conn> _outputs;
-
 public:
-	Connectors<Conn> & inputs = _inputs;
-	Connectors<Conn> & outputs = _outputs;
+	std::unique_ptr<Conn[]> const inputs;
+	std::unique_ptr<Conn[]> const outputs;
 
-	Gate(std::size_t num_inputs, std::size_t num_outputs) : _inputs(num_inputs), _outputs(num_outputs) {
+	Gate(std::size_t num_inputs, std::size_t num_outputs) : inputs(std::make_unique<Conn[]>(num_inputs)), outputs(std::make_unique<Conn[]>(num_outputs)) {
 		for (std::size_t i = 0; i < num_inputs; ++i) {
-			_inputs[i].connect_to(this, i);
+			inputs[i].connect_to(this, i);
 		}
 	}
 	virtual ~Gate() = 0 { };
 
-	virtual void eval() = 0;
+	virtual void eval() { }
+};
+
+class GateTerminator : public Gate {
+public:
+	Conn& p_output;
+	GateTerminator(Conn& conn) : Gate(1, 0), p_output(conn) { }
+	void eval() {
+		p_output = inputs[0];
+	}
 };
 
 class NotGate : public Gate {
 public:
 	NotGate() : Gate(1, 1) { }
 	void eval() {
-		_outputs[0] = !inputs[0];
+		outputs[0] = !inputs[0];
 	}
 };
 
@@ -75,23 +65,20 @@ class AndGate : public Gate {
 public:
 	AndGate() : Gate(2, 1) { }
 	void eval() {
-		_outputs[0] = inputs[0] && inputs[1];
+		outputs[0] = inputs[0] && inputs[1];
 	}
 };
 
 class NandGate : public Gate {
 	AndGate and1;
 	NotGate not1;
+	GateTerminator term;
 public:
-	NandGate() : Gate(2, 1) {
+	NandGate() : Gate(2, 1), term(outputs[0]) {
 		and1.outputs[0].connect_to(&not1, 0);
-	}
-
-	void eval() {
-		and1.inputs[0] = inputs[0];
-		and1.inputs[1] = inputs[1];
-		and1.eval();
-		_outputs[0] = not1.outputs[0];
+		inputs[0].connect_to(&and1, 0);
+		inputs[1].connect_to(&and1, 1);
+		not1.outputs[0].connect_to(&term, 0);
 	}
 };
 
@@ -99,19 +86,16 @@ class NotGate2 : public Gate {
 	NandGate nand1;
 	NandGate nand2;
 	NandGate nand3;
+	GateTerminator term;
 public:
-	NotGate2() : Gate(1, 1) {
+	NotGate2() : Gate(1, 1), term(outputs[0]) {
+		inputs[0].connect_to(&nand1, 0);
 		nand1.inputs[1] = true;
 		nand1.outputs[0].connect_to(&nand2, 0);
 		nand2.inputs[1] = true;
 		nand2.outputs[0].connect_to(&nand3, 0);
 		nand3.inputs[1] = true;
-	}
-
-	void eval() {
-		nand1.inputs[0] = inputs[0];
-		nand1.eval();
-		_outputs[0] = nand3.outputs[0];
+		nand3.outputs[0].connect_to(&term, 0);
 	}
 };
 
