@@ -1,5 +1,7 @@
 #include <memory>
 #include <vector>
+#include <sstream>
+#include <string>
 
 class Gate {
 public:
@@ -36,7 +38,9 @@ protected:
 		FixedArray(std::size_t size) : _p(std::make_unique<T[]>(size)), _size(size) { }
 		T& operator[](std::size_t index) { return _p[index]; }
 		const T& operator[](std::size_t index) const { return _p[index]; }
-		std::size_t size() { return _size; }
+		constexpr std::size_t size() const { return _size; }
+		T* begin() { return _p.get(); }
+		T* end() { return _p.get() + _size; }
 	};
 
 public:
@@ -50,10 +54,37 @@ public:
 		}
 	}
 	Gate(ConnArray in, ConnArray out) : inputs(std::move(in)), outputs(std::move(out)) { }
-	virtual ~Gate() { };
+	virtual ~Gate() = 0;
 
 	virtual void eval() { }
+
+	std::string truth_table() {
+		for (auto& it : inputs) {
+			it = false;
+		}
+		std::ostringstream os;
+		for (std::size_t i = 0; i < (1 << inputs.size()); ++i) {
+			for (auto& it : inputs) {
+				os << it << '|';
+			}for (auto& it : outputs) {
+				os << '|' << it;
+			}
+			os << '\n';
+			for (auto& it : inputs) {
+				if (it) {
+					it = false;
+				}
+				else {
+					it = true;
+					break;
+				}
+			}
+		}
+		return os.str();
+	}
 };
+
+Gate::~Gate() { }
 
 class GateTerminator : public Gate {
 	Connector& p_output;
@@ -123,9 +154,9 @@ using namespace std;
 
 int main() {
 	//cout << std::boolalpha;
-	cout << sizeof(std::shared_ptr<int>) << ' ' << sizeof(std::unique_ptr<int>) << '\n';
 
 	NotGate2 not1;
+	cout << not1.truth_table();
 	not1.inputs[0] = false;
 	cout << "not(false) = " << bool(not1.outputs[0]) << '\n';
 	not1.inputs[0] = true;
@@ -133,8 +164,8 @@ int main() {
 	not1.inputs[0] = false;
 	cout << "not(false) = " << bool(not1.outputs[0]) << '\n';
 
-
 	AndGate and1;
+	cout << and1.truth_table();
 	and1.inputs[0] = false;
 	and1.inputs[1] = false;
 	cout << "and(false, false) = " << bool(and1.outputs[0]) << '\n';
@@ -156,7 +187,7 @@ int main() {
 	gates[0]->outputs[0].connect_to(gates[1].get(), 0);
 	gates[1]->outputs[0].connect_to(gates[2].get(), 0);
 	GateCompose nand1{ std::move(ins), std::move(outs), std::move(gates) };
-
+	cout << nand1.truth_table();
 	//NandGate nand1;
 	nand1.inputs[0] = false;
 	nand1.inputs[1] = false;
